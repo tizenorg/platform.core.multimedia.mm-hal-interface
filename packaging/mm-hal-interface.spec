@@ -1,6 +1,6 @@
 Name:       mm-hal-interface
 Summary:    Multimedia HAL Interface
-Version:    0.0.1
+Version:    0.0.2
 Release:    0
 Group:      Multimedia/Development
 License:    Apache-2.0

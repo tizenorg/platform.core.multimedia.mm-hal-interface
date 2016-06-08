@@ -13,6 +13,9 @@ Multimedia framework hardware abstraction layer interface package.
 %prep
 %setup -q
 
+%build
+
+
 %install
 install -d -m 755 %{buildroot}%{_includedir}
 install -m 644 audio/*.h %{buildroot}%{_includedir}

@@ -21,7 +21,6 @@
 #define __TIZEN_CAMERA_HAL_H__
 
 #include <stdint.h>
-#include <tbm_bufmgr.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,9 +56,14 @@ typedef enum camera_error {
 	CAMERA_ERROR_DEVICE_NOT_FOUND       = 0x80002006,
 	CAMERA_ERROR_DEVICE_UNAVAILABLE     = 0x80002007,
 	CAMERA_ERROR_DEVICE_NOT_SUPPORTED   = 0x80002008,
-	CAMERA_ERROR_DEVICE_ESD             = 0x80002009,
-	CAMERA_ERROR_INTERNAL               = 0x8000200a,
+	CAMERA_ERROR_DEVICE_READ            = 0x80002009,
+	CAMERA_ERROR_DEVICE_WRITE           = 0x8000200a,
+	CAMERA_ERROR_DEVICE_BUSY            = 0x8000200b,
+	CAMERA_ERROR_DEVICE_TIME_OUT        = 0x8000200c,
+	CAMERA_ERROR_DEVICE_ESD             = 0x8000200d,
+	CAMERA_ERROR_INTERNAL               = 0x8000200e,
 
+	CAMERA_ERROR_NOT_IMPLEMENTED        = 0x80002ffe,
 	CAMERA_ERROR_UNKNOWN                = 0x80002fff
 } camera_error_t;
 
@@ -149,10 +153,11 @@ typedef struct camera_buffer {
 	int index;
 	camera_pixel_format_t format;
 	camera_resolution_t resolution;
+	uint32_t total_size;
 	uint32_t num_planes;
 	camera_plane_t planes[BUFFER_PLANE_MAX];
 	uint32_t num_bos;
-	tbm_bo bos[BUFFER_PLANE_MAX];
+	void *bos[BUFFER_PLANE_MAX];
 } camera_buffer_t;
 
 /**
@@ -222,11 +227,10 @@ typedef enum camera_flip {
  * @since_tizen 3.0
  */
 typedef struct camera_format {
-	camera_pixel_format_t preview_format;
-	camera_resolution_t preview_resolution;
-	uint32_t preview_fps;
+	camera_pixel_format_t stream_format;
+	camera_resolution_t stream_resolution;
+	uint32_t stream_fps;
 	camera_rotation_t stream_rotation;
-	camera_flip_t stream_flip;
 	camera_pixel_format_t capture_format;
 	camera_resolution_t capture_resolution;
 	uint32_t capture_quality;
@@ -237,10 +241,22 @@ typedef struct camera_format {
  * @since_tizen 3.0
  */
 typedef enum camera_focus_mode {
+	CAMERA_FOCUS_MODE_NONE,
 	CAMERA_FOCUS_MODE_PAN,
 	CAMERA_FOCUS_MODE_AUTO,
 	CAMERA_FOCUS_MODE_CONTINUOUS_AUTO
 } camera_focus_mode_t;
+
+/**
+ * @brief Enumeration for the focus range.
+ * @since_tizen 3.0
+ */
+typedef enum camera_focus_range {
+	CAMERA_FOCUS_RANGE_NONE,
+	CAMERA_FOCUS_RANGE_NORMAL,
+	CAMERA_FOCUS_RANGE_MACRO,
+	CAMERA_FOCUS_RANGE_FULL
+} camera_focus_range_t;
 
 /**
  * @brief Enumeration for the white balance.
@@ -326,6 +342,30 @@ typedef enum camera_shot_mode {
 } camera_shot_mode_t;
 
 /**
+ * @brief Enumeration for the flash mode.
+ * @since_tizen 3.0
+ */
+typedef enum camera_flash_mode {
+	CAMERA_FLASH_MODE_OFF = 0,          /**< Always off */
+	CAMERA_FLASH_MODE_ON,               /**< Always splashes */
+	CAMERA_FLASH_MODE_AUTO,             /**< Depending on intensity of light, strobe starts to flash */
+	CAMERA_FLASH_MODE_REDEYE_REDUCTION, /**< Red eye reduction. Multiple flash before capturing */
+	CAMERA_FLASH_MODE_SLOW_SYNC,        /**< Slow sync curtain synchronization */
+	CAMERA_FLASH_MODE_FRONT_CURTAIN,    /**< Front curtain synchronization */
+	CAMERA_FLASH_MODE_REAR_CURTAIN,     /**< Rear curtain synchronization */
+	CAMERA_FLASH_MODE_PERMANENT,        /**< Keep turned on until turning off */
+} camera_flash_mode_t;
+
+/**
+ * @brief Enumeration for the face detection.
+ * @since_tizen 3.0
+ */
+typedef enum camera_face_detection {
+	CAMERA_FACE_DETECTION_OFF = 0,      /**< Face detection off */
+	CAMERA_FACE_DETECTION_ON            /**< Face detection on */
+} camera_face_detection_t;
+
+/**
  * @brief Definitions for the camera command.
  * @since_tizen 3.0
  */
@@ -334,20 +374,27 @@ typedef enum camera_shot_mode {
 #define CAMERA_COMMAND_ISO                      ((int64_t)(CAMERA_COMMAND_BASE << 2))
 #define CAMERA_COMMAND_CONTRAST                 ((int64_t)(CAMERA_COMMAND_BASE << 3))
 #define CAMERA_COMMAND_SATURATION               ((int64_t)(CAMERA_COMMAND_BASE << 4))
-#define CAMERA_COMMAND_EFFECT                   ((int64_t)(CAMERA_COMMAND_BASE << 5))
-#define CAMERA_COMMAND_SCENE_MODE               ((int64_t)(CAMERA_COMMAND_BASE << 6))
-#define CAMERA_COMMAND_EXPOSURE_MODE            ((int64_t)(CAMERA_COMMAND_BASE << 7))
-#define CAMERA_COMMAND_EXPOSURE                 ((int64_t)(CAMERA_COMMAND_BASE << 8))
-#define CAMERA_COMMAND_ROTATION                 ((int64_t)(CAMERA_COMMAND_BASE << 9))
-#define CAMERA_COMMAND_FLIP                     ((int64_t)(CAMERA_COMMAND_BASE << 10))
-#define CAMERA_COMMAND_FOCUS_MODE               ((int64_t)(CAMERA_COMMAND_BASE << 11))
-#define CAMERA_COMMAND_SHOT_MODE                ((int64_t)(CAMERA_COMMAND_BASE << 12))
-#define CAMERA_COMMAND_ANTI_SHAKE               ((int64_t)(CAMERA_COMMAND_BASE << 13))
-#define CAMERA_COMMAND_FOCUS_AREA               ((int64_t)(CAMERA_COMMAND_BASE << 14))
-#define CAMERA_COMMAND_DIGITAL_ZOOM             ((int64_t)(CAMERA_COMMAND_BASE << 15))
-#define CAMERA_COMMAND_OPTICAL_ZOOM             ((int64_t)(CAMERA_COMMAND_BASE << 16))
-#define CAMERA_COMMAND_RECORDING_HINT           ((int64_t)(CAMERA_COMMAND_BASE << 17))
-#define CAMERA_COMMAND_WDR                      ((int64_t)(CAMERA_COMMAND_BASE << 18))
+#define CAMERA_COMMAND_HUE                      ((int64_t)(CAMERA_COMMAND_BASE << 5))
+#define CAMERA_COMMAND_SHARPNESS                ((int64_t)(CAMERA_COMMAND_BASE << 6))
+#define CAMERA_COMMAND_EFFECT                   ((int64_t)(CAMERA_COMMAND_BASE << 7))
+#define CAMERA_COMMAND_SCENE_MODE               ((int64_t)(CAMERA_COMMAND_BASE << 8))
+#define CAMERA_COMMAND_EXPOSURE_MODE            ((int64_t)(CAMERA_COMMAND_BASE << 9))
+#define CAMERA_COMMAND_EXPOSURE                 ((int64_t)(CAMERA_COMMAND_BASE << 10))
+#define CAMERA_COMMAND_ROTATION                 ((int64_t)(CAMERA_COMMAND_BASE << 11))
+#define CAMERA_COMMAND_FLIP                     ((int64_t)(CAMERA_COMMAND_BASE << 12))
+#define CAMERA_COMMAND_FOCUS_MODE               ((int64_t)(CAMERA_COMMAND_BASE << 13))
+#define CAMERA_COMMAND_FOCUS_RANGE              ((int64_t)(CAMERA_COMMAND_BASE << 14))
+#define CAMERA_COMMAND_SHOT_MODE                ((int64_t)(CAMERA_COMMAND_BASE << 15))
+#define CAMERA_COMMAND_ANTI_SHAKE               ((int64_t)(CAMERA_COMMAND_BASE << 16))
+#define CAMERA_COMMAND_FOCUS_AREA               ((int64_t)(CAMERA_COMMAND_BASE << 17))
+#define CAMERA_COMMAND_DIGITAL_ZOOM             ((int64_t)(CAMERA_COMMAND_BASE << 18))
+#define CAMERA_COMMAND_OPTICAL_ZOOM             ((int64_t)(CAMERA_COMMAND_BASE << 19))
+#define CAMERA_COMMAND_RECORDING_HINT           ((int64_t)(CAMERA_COMMAND_BASE << 20))
+#define CAMERA_COMMAND_WDR                      ((int64_t)(CAMERA_COMMAND_BASE << 21))
+#define CAMERA_COMMAND_SHUTTER_SPEED            ((int64_t)(CAMERA_COMMAND_BASE << 22))
+#define CAMERA_COMMAND_FLASH_MODE               ((int64_t)(CAMERA_COMMAND_BASE << 23))
+#define CAMERA_COMMAND_FACE_DETECTION           ((int64_t)(CAMERA_COMMAND_BASE << 24))
+
 
 typedef struct camera_batch_command_control {
 	/* flag for modified command */
@@ -358,6 +405,8 @@ typedef struct camera_batch_command_control {
 	int iso;
 	int contrast;
 	int saturation;
+	int hue;
+	int sharpness;
 	camera_effect_t effect;
 	camera_scene_mode_t scene_mode;
 	camera_exposure_mode_t exposure_mode;
@@ -365,12 +414,16 @@ typedef struct camera_batch_command_control {
 	camera_rotation_t rotation;
 	camera_flip_t flip;
 	camera_focus_mode_t focus_mode;
+	camera_focus_range_t focus_range;
 	camera_exposure_mode_t shot_mode;
 	int anti_shake;
 	camera_rectangle_t focus_area;
 	int digital_zoom;
 	int optical_zoom;
 	int recording_hint;
+	int wdr;
+	camera_flash_mode_t flash_mode;
+	camera_face_detection_t face_detection;
 } camera_batch_command_control_t;
 
 /**
@@ -397,10 +450,11 @@ typedef struct camera_resolution_list {
  */
 typedef struct camera_device_info {
 	uint32_t index;
-	const char name[DEVICE_NAME_LENGTH_MAX];
+	const char *name;
 	camera_facing_direction_t facing_direction;
 	camera_format_list_t format_list;
 	camera_resolution_list_t preview_list;
+	camera_resolution_list_t capture_list;
 	camera_resolution_list_t video_list;
 } camera_device_info_t;
 
@@ -420,7 +474,6 @@ typedef struct camera_device_list {
 typedef enum camera_message_type {
 	CAMERA_MESSAGE_TYPE_FOCUS_CHANGED,
 	CAMERA_MESSAGE_TYPE_CAPTURED,
-	CAMERA_MESSAGE_TYPE_CAPTURE_DATA,
 	CAMERA_MESSAGE_TYPE_HDR_PROGRESS,
 	CAMERA_MESSAGE_TYPE_ERROR
 } camera_message_type_t;
@@ -433,10 +486,9 @@ typedef struct camera_message {
 	camera_message_type_t type;
 	union {
 		camera_focus_state_t focus_state;
-		camera_buffer_t capture_data;
 		uint32_t hdr_progress;
 		camera_error_t error_code;
-	} message;
+	};
 } camera_message_t;
 
 /**
@@ -447,7 +499,7 @@ typedef struct camera_message {
  * @see camera_add_message_callback()
  * @see camera_remove_message_callback()
  */
-typedef void (*camera_message_cb)(camera_message_t *message, void *user_data);
+typedef int (*camera_message_cb)(camera_message_t *message, void *user_data);
 
 /**
  * @brief Callback function for captured preview frame from camera device.
@@ -459,7 +511,7 @@ typedef void (*camera_message_cb)(camera_message_t *message, void *user_data);
  * @see camera_start_preview()
  * @see camera_stop_preview()
  */
-typedef void (*camera_preview_frame_cb)(camera_buffer_t *buffer, camera_metadata_t *meta, void *user_data);
+typedef int (*camera_preview_frame_cb)(camera_buffer_t *buffer, camera_metadata_t *meta, void *user_data);
 
 /**
  * @brief Callback function for captured video frame from camera device.
@@ -471,7 +523,7 @@ typedef void (*camera_preview_frame_cb)(camera_buffer_t *buffer, camera_metadata
  * @see camera_start_record()
  * @see camera_stop_record()
  */
-typedef void (*camera_video_frame_cb)(camera_buffer_t *buffer, camera_metadata_t *meta, void *user_data);
+typedef int (*camera_video_frame_cb)(camera_buffer_t *buffer, camera_metadata_t *meta, void *user_data);
 
 /**
  * @brief Callback function for captured still image from camera device.
@@ -484,7 +536,7 @@ typedef void (*camera_video_frame_cb)(camera_buffer_t *buffer, camera_metadata_t
  * @see camera_start_capture()
  * @see camera_stop_capture()
  */
-typedef void (*camera_capture_cb)(camera_buffer_t *main, camera_buffer_t *postview, camera_buffer_t *thumbnail, void *user_data);
+typedef int (*camera_capture_cb)(camera_buffer_t *main, camera_buffer_t *postview, camera_buffer_t *thumbnail, void *user_data);
 
 /**
  * @brief The structure type of the camera interface.
@@ -514,6 +566,7 @@ typedef struct camera_interface {
 	int (*stop_record)(void *camera_handle);
 	int (*set_command)(void *camera_handle, int command, void *value);
 	int (*get_command)(void *camera_handle, int command, void *value);
+	int (*set_batch_command)(void *camera_handle, camera_batch_command_control_t *batch_command, int64_t *error_command);
 } camera_interface_t;
 
 
@@ -922,7 +975,7 @@ int camera_get_command(void *camera_handle, int64_t command, void *value);
  * @see camera_set_command()
  * @see camera_get_command()
  */
-int camera_set_batch_command(void *camera_handle, camera_batch_command_t *batch_command, int64_t *error_command);
+int camera_set_batch_command(void *camera_handle, camera_batch_command_control_t *batch_command, int64_t *error_command);
 
 /**
  * @}
